@@ -1,0 +1,621 @@
+
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>極光 2048 - 現代感益智小遊戲</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: radial-gradient(circle at center, #1e1b4b 0%, #0f172a 100%);
+            overscroll-behavior-y: contain; /* 阻止手機下拉重新整理，優化滑動體驗 */
+        }
+
+        /* 骨架網格微光效果 */
+        .grid-bg-cell {
+            background-color: rgba(30, 41, 59, 0.5);
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        /* 方塊生成動畫 */
+        @keyframes popIn {
+            0% { transform: scale(0); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* 方塊合併動畫 */
+        @keyframes mergeBounce {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.15); }
+            100% { transform: scale(1); }
+        }
+
+        .tile-new {
+            animation: popIn 200ms ease-out forwards;
+        }
+
+        .tile-merged {
+            animation: mergeBounce 180ms ease-in-out forwards;
+        }
+
+        /* 方塊顏色漸層 */
+        .tile-2 { background: linear-gradient(135deg, #fef08a 0%, #facc15 100%); color: #422006; box-shadow: 0 4px 10px rgba(250, 204, 21, 0.3); }
+        .tile-4 { background: linear-gradient(135deg, #fed7aa 0%, #fb923c 100%); color: #431407; box-shadow: 0 4px 10px rgba(251, 146, 60, 0.3); }
+        .tile-8 { background: linear-gradient(135deg, #fca5a5 0%, #f87171 100%); color: #fff; box-shadow: 0 4px 12px rgba(248, 113, 113, 0.4); }
+        .tile-16 { background: linear-gradient(135deg, #fdba74 0%, #f97316 100%); color: #fff; box-shadow: 0 4px 14px rgba(249, 115, 22, 0.4); }
+        .tile-32 { background: linear-gradient(135deg, #f87171 0%, #ef4444 100%); color: #fff; box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4); }
+        .tile-64 { background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%); color: #fff; box-shadow: 0 4px 16px rgba(225, 29, 72, 0.5); }
+        .tile-128 { background: linear-gradient(135deg, #a7f3d0 0%, #10b981 100%); color: #fff; box-shadow: 0 4px 18px rgba(16, 185, 129, 0.5); }
+        .tile-256 { background: linear-gradient(135deg, #6ee7b7 0%, #059669 100%); color: #fff; box-shadow: 0 4px 20px rgba(5, 150, 105, 0.6); }
+        .tile-512 { background: linear-gradient(135deg, #67e8f9 0%, #06b6d4 100%); color: #fff; box-shadow: 0 4px 22px rgba(6, 182, 212, 0.6); }
+        .tile-1024 { background: linear-gradient(135deg, #c084fc 0%, #8b5cf6 100%); color: #fff; box-shadow: 0 4px 24px rgba(139, 92, 246, 0.7); }
+        .tile-2048 { background: linear-gradient(135deg, #f472b6 0%, #db2777 100%); color: #fff; box-shadow: 0 4px 30px rgba(219, 39, 119, 0.85); text-shadow: 0 0 10px rgba(255, 255, 255, 0.5); }
+        .tile-super { background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); color: #fff; box-shadow: 0 4px 35px rgba(29, 78, 216, 0.9); border: 2px solid #60a5fa; }
+    </style>
+</head>
+<body class="min-h-screen text-slate-100 flex flex-col items-center justify-between p-4 md:p-6 selection:bg-indigo-500 selection:text-white">
+
+    <header class="w-full max-w-md flex flex-col gap-4 mt-2">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-4xl font-extrabold tracking-tight bg-gradient-to-r from-amber-400 via-pink-500 to-indigo-400 bg-clip-text text-transparent">AURORA 2048</h1>
+                <p class="text-xs text-slate-400 mt-1">沉浸在璀璨極光中的合成謎題</p>
+            </div>
+            
+            <button id="restart-btn" class="flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 active:scale-95 transition-all rounded-xl text-sm font-semibold border border-slate-700/50 shadow-lg">
+                <i class="fa-solid fa-rotate-right text-amber-400"></i> 新遊戲
+            </button>
+        </div>
+
+        <!-- 計分板 -->
+        <div class="grid grid-cols-2 gap-3">
+            <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3 flex flex-col items-center justify-center relative overflow-hidden backdrop-blur-md">
+                <div class="absolute top-0 left-0 w-full h-[2px] bg-indigo-500/50"></div>
+                <span class="text-xs font-bold text-indigo-400 tracking-wider">SCORE</span>
+                <span id="score" class="text-2xl font-extrabold text-white mt-0.5 transition-all duration-100">0</span>
+                <span id="score-addition" class="absolute text-sm font-bold text-green-400 -top-4 opacity-0 pointer-events-none transition-all duration-300">+0</span>
+            </div>
+            <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-3 flex flex-col items-center justify-center relative overflow-hidden backdrop-blur-md">
+                <div class="absolute top-0 left-0 w-full h-[2px] bg-amber-500/50"></div>
+                <span class="text-xs font-bold text-amber-400 tracking-wider">BEST RECORD</span>
+                <span id="best-score" class="text-2xl font-extrabold text-white mt-0.5">0</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="w-full max-w-md flex items-center justify-center my-6 relative">
+        <!-- 4x4 遊戲棋盤 -->
+        <div class="w-full aspect-square bg-slate-950/80 p-3 md:p-4 rounded-3xl border border-slate-800/80 shadow-2xl relative">
+            
+            <!-- 底層網格 -->
+            <div class="grid grid-cols-4 grid-rows-4 gap-2 md:gap-3 w-full h-full">
+                <!-- Row 1 -->
+                <div class="grid-bg-cell rounded-2xl w-full h-full"></div>
+                <div class="grid-bg-cell rounded-2xl w-full h-full"></div>
+                <div class="grid-bg-cell rounded-2xl w-full h-full"></div>
+                <div class="grid-bg-cell rounded-2xl w-full h-full"></div>
+                <!-- Row 2 -->
+                <div class="grid-bg-cell rounded-2xl w-full h-full"></div>
+                <div class="grid-bg-cell rounded-2xl w-full h-full"></div>
+                <div class="grid-bg-cell rounded-2xl w-full h-full"></div>
+                <div class="grid-bg-cell rounded-2xl w-full h-full"></div>
+                <!-- Row 3 -->
+                <div class="grid-bg-cell rounded-2xl w-full h-full"></div>
+                <div class="grid-bg-cell rounded-2xl w-full h-full"></div>
+                <div class="grid-bg-cell rounded-2xl w-full h-full"></div>
+                <div class="grid-bg-cell rounded-2xl w-full h-full"></div>
+                <!-- Row 4 -->
+                <div class="grid-bg-cell rounded-2xl w-full h-full"></div>
+                <div class="grid-bg-cell rounded-2xl w-full h-full"></div>
+                <div class="grid-bg-cell rounded-2xl w-full h-full"></div>
+                <div class="grid-bg-cell rounded-2xl w-full h-full"></div>
+            </div>
+
+            <!-- 動態數字方塊容器 -->
+            <div id="tile-container" class="absolute inset-0 p-3 md:p-4 grid grid-cols-4 grid-rows-4 gap-2 md:gap-3 pointer-events-none">
+                <!-- JavaScript 將動態生成在此 -->
+            </div>
+
+            <!-- 勝利對話框 (Overlay) -->
+            <div id="victory-overlay" class="absolute inset-0 bg-slate-950/90 backdrop-blur-md rounded-3xl flex flex-col items-center justify-center p-6 text-center opacity-0 pointer-events-none transition-opacity duration-300 z-20">
+                <div class="w-20 h-20 bg-gradient-to-tr from-yellow-400 to-amber-500 rounded-full flex items-center justify-center text-slate-950 text-4xl mb-4 animate-bounce">
+                    <i class="fa-solid fa-crown"></i>
+                </div>
+                <h2 class="text-3xl font-extrabold bg-gradient-to-r from-amber-400 to-yellow-200 bg-clip-text text-transparent">達成 2048！</h2>
+                <p class="text-slate-300 text-sm mt-2 max-w-[260px] leading-relaxed">太厲害了！你成功挑戰了北極光之巔。你想繼續挑戰極限，還是開闢新局？</p>
+                <div class="flex flex-col gap-2 w-full max-w-[200px] mt-6">
+                    <button id="keep-playing-btn" class="w-full py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95 text-sm">
+                        繼續挑戰
+                    </button>
+                    <button id="victory-restart-btn" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl border border-slate-700 shadow-md transition-all active:scale-95 text-sm">
+                        重新開始
+                    </button>
+                </div>
+            </div>
+
+            <!-- 失敗對話框 (Overlay) -->
+            <div id="gameover-overlay" class="absolute inset-0 bg-slate-950/90 backdrop-blur-md rounded-3xl flex flex-col items-center justify-center p-6 text-center opacity-0 pointer-events-none transition-opacity duration-300 z-20">
+                <div class="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center text-rose-500 text-3xl mb-4">
+                    <i class="fa-solid fa-heart-crack"></i>
+                </div>
+                <h2 class="text-3xl font-extrabold text-rose-500">沒有可移動的步數</h2>
+                <p class="text-slate-400 text-sm mt-2">別灰心，每一次嘗試都是邁向 2048 的累積！</p>
+                <div class="bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-2 mt-4 flex gap-4 text-sm">
+                    <div>
+                        <span class="text-slate-500 block text-xs">最終得分</span>
+                        <span id="final-score" class="font-bold text-white text-lg">0</span>
+                    </div>
+                    <div class="border-l border-slate-800 h-8 self-center"></div>
+                    <div>
+                        <span class="text-slate-500 block text-xs">最佳紀錄</span>
+                        <span id="final-best" class="font-bold text-amber-400 text-lg">0</span>
+                    </div>
+                </div>
+                <button id="gameover-restart-btn" class="w-full max-w-[200px] py-3 mt-6 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-400 hover:to-violet-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/20 transition-all active:scale-95 text-sm">
+                    再試一次
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <footer class="w-full max-w-md text-center flex flex-col items-center gap-3">
+        <!-- 虛擬方向鍵 (方便平板 / 桌機滑鼠點擊) -->
+        <div class="flex flex-col items-center gap-1.5 md:hidden">
+            <button id="control-up" class="w-12 h-10 bg-slate-800/80 hover:bg-slate-700 active:scale-90 rounded-xl flex items-center justify-center border border-slate-700/50"><i class="fa-solid fa-chevron-up text-indigo-400"></i></button>
+            <div class="flex gap-1.5">
+                <button id="control-left" class="w-12 h-10 bg-slate-800/80 hover:bg-slate-700 active:scale-90 rounded-xl flex items-center justify-center border border-slate-700/50"><i class="fa-solid fa-chevron-left text-indigo-400"></i></button>
+                <button id="control-down" class="w-12 h-10 bg-slate-800/80 hover:bg-slate-700 active:scale-90 rounded-xl flex items-center justify-center border border-slate-700/50"><i class="fa-solid fa-chevron-down text-indigo-400"></i></button>
+                <button id="control-right" class="w-12 h-10 bg-slate-800/80 hover:bg-slate-700 active:scale-90 rounded-xl flex items-center justify-center border border-slate-700/50"><i class="fa-solid fa-chevron-right text-indigo-400"></i></button>
+            </div>
+        </div>
+
+        <div class="text-xs text-slate-500 leading-relaxed max-w-xs mt-1">
+            <span class="hidden md:inline"><i class="fa-solid fa-keyboard text-indigo-400 mr-1"></i> 使用 <b>方向鍵</b> 或 <b>WASD</b> 移動方塊</span>
+            <span class="md:hidden"><i class="fa-solid fa-hand-pointer text-indigo-400 mr-1"></i> 在棋盤上<b>滑動</b> 或 使用控制鈕移動</span>
+            <br>
+            <span class="text-slate-600 mt-1 block">相同數字的方塊合併時，會相加翻倍！</span>
+        </div>
+    </footer>
+
+    <script>
+        // 遊戲狀態變數
+        let board = Array(4).fill().map(() => Array(4).fill(0));
+        let score = 0;
+        let bestScore = 0;
+        let isWon = false;
+        let keepPlaying = false;
+        
+        // 用於追蹤哪些方塊是「新生成」或「剛合併」的，以便在渲染時套用動畫
+        let newTilePos = null;      // {r, c}
+        let mergedTilePositions = []; // Array of {r, c}
+
+        // 綁定 DOM 元素
+        const tileContainer = document.getElementById('tile-container');
+        const scoreEl = document.getElementById('score');
+        const scoreAdditionEl = document.getElementById('score-addition');
+        const bestScoreEl = document.getElementById('best-score');
+        const victoryOverlay = document.getElementById('victory-overlay');
+        const gameoverOverlay = document.getElementById('gameover-overlay');
+        
+        const restartBtn = document.getElementById('restart-btn');
+        const victoryRestartBtn = document.getElementById('victory-restart-btn');
+        const gameoverRestartBtn = document.getElementById('gameover-restart-btn');
+        const keepPlayingBtn = document.getElementById('keep-playing-btn');
+        
+        const finalScoreEl = document.getElementById('final-score');
+        const finalBestEl = document.getElementById('final-best');
+
+        window.onload = function() {
+            // 從 LocalStorage 載入最高紀錄
+            const storedBest = localStorage.getItem('aurora_2048_best');
+            if (storedBest) {
+                bestScore = parseInt(storedBest, 10);
+                bestScoreEl.textContent = bestScore;
+            }
+            initGame();
+        };
+
+        // 初始化/重置遊戲
+        function initGame() {
+            board = Array(4).fill().map(() => Array(4).fill(0));
+            score = 0;
+            isWon = false;
+            keepPlaying = false;
+            newTilePos = null;
+            mergedTilePositions = [];
+            
+            updateScore(0);
+            
+            // 隱藏 Overlays
+            victoryOverlay.classList.add('opacity-0', 'pointer-events-none');
+            gameoverOverlay.classList.add('opacity-0', 'pointer-events-none');
+
+            // 隨機在兩個不同位置生成起始數字
+            spawnTile();
+            spawnTile();
+            
+            renderBoard();
+        }
+
+        // 隨機在空格生成 2 (90% 機率) 或 4 (10% 機率)
+        function spawnTile() {
+            const emptyCells = [];
+            for (let r = 0; r < 4; r++) {
+                for (let c = 0; c < 4; c++) {
+                    if (board[r][c] === 0) {
+                        emptyCells.push({r, c});
+                    }
+                }
+            }
+
+            if (emptyCells.length > 0) {
+                const randomCell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+                const val = Math.random() < 0.9 ? 2 : 4;
+                board[randomCell.r][randomCell.c] = val;
+                newTilePos = { r: randomCell.r, c: randomCell.c };
+            }
+        }
+
+        // 繪製棋盤狀態
+        function renderBoard() {
+            tileContainer.innerHTML = '';
+            
+            for (let r = 0; r < 4; r++) {
+                for (let c = 0; c < 4; c++) {
+                    const value = board[r][c];
+                    if (value > 0) {
+                        const tile = document.createElement('div');
+                        
+                        // 定位與基本排版
+                        tile.className = `w-full h-full rounded-2xl flex items-center justify-center font-extrabold transition-all duration-100 select-none`;
+                        
+                        // 動態文字大小
+                        if (value >= 1024) {
+                            tile.classList.add('text-xl', 'md:text-2xl');
+                        } else if (value >= 128) {
+                            tile.classList.add('text-2xl', 'md:text-3xl');
+                        } else {
+                            tile.classList.add('text-3xl', 'md:text-4xl');
+                        }
+
+                        // 套用專屬色彩與陰影
+                        if (value <= 2048) {
+                            tile.classList.add(`tile-${value}`);
+                        } else {
+                            tile.classList.add('tile-super');
+                        }
+
+                        // 設定文字內容
+                        tile.textContent = value;
+
+                        // 動態特效套用
+                        if (newTilePos && newTilePos.r === r && newTilePos.c === c) {
+                            tile.classList.add('tile-new');
+                        } else {
+                            const isMerged = mergedTilePositions.some(pos => pos.r === r && pos.c === c);
+                            if (isMerged) {
+                                tile.classList.add('tile-merged');
+                            }
+                        }
+
+                        tileContainer.appendChild(tile);
+                    } else {
+                        // 空白佔位元件 (必須保留以維持 Grid 的格子定位)
+                        const emptyPlaceholder = document.createElement('div');
+                        tileContainer.appendChild(emptyPlaceholder);
+                    }
+                }
+            }
+            
+            // 清理暫時的動畫旗標
+            newTilePos = null;
+            mergedTilePositions = [];
+        }
+
+        // 更新分數
+        function updateScore(addedPoints) {
+            score += addedPoints;
+            scoreEl.textContent = score;
+
+            if (addedPoints > 0) {
+                // 加分小特效
+                scoreAdditionEl.textContent = `+${addedPoints}`;
+                scoreAdditionEl.classList.remove('opacity-0', '-top-4');
+                scoreAdditionEl.classList.add('opacity-100', '-top-8');
+                
+                setTimeout(() => {
+                    scoreAdditionEl.classList.add('opacity-0', '-top-4');
+                    scoreAdditionEl.classList.remove('opacity-100', '-top-8');
+                }, 400);
+            }
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestScoreEl.textContent = bestScore;
+                localStorage.setItem('aurora_2048_best', bestScore);
+            }
+        }
+
+        // 滑動與合併演算法 - 先以單列(Row)向左合併為核心
+        function slideLeftRow(row) {
+            // 1. 過濾出非空值
+            let activeTiles = row.filter(val => val !== 0);
+            let resultRow = [];
+            let rowScore = 0;
+            let rowMergedPositions = []; // 標記這一步在此 row 的哪裡發生合併
+
+            // 2. 合併相鄰相同的方塊
+            for (let i = 0; i < activeTiles.length; i++) {
+                if (activeTiles[i] === activeTiles[i + 1]) {
+                    const doubledValue = activeTiles[i] * 2;
+                    resultRow.push(doubledValue);
+                    rowScore += doubledValue;
+                    rowMergedPositions.push(resultRow.length - 1); // 記錄新陣列中的索引
+                    
+                    // 如果合成出 2048 且尚未宣告過勝利，觸發勝利狀態
+                    if (doubledValue === 2048 && !isWon && !keepPlaying) {
+                        isWon = true;
+                    }
+                    i++; // 合併後，跳過下一個重複的元素
+                } else {
+                    resultRow.push(activeTiles[i]);
+                }
+            }
+
+            // 3. 補零使其長度為 4
+            while (resultRow.length < 4) {
+                resultRow.push(0);
+            }
+
+            return {
+                newRow: resultRow,
+                score: rowScore,
+                mergedIndices: rowMergedPositions
+            };
+        }
+
+        // 旋轉棋盤（方便利用「向左」邏輯計算「上下右」移動）
+        // 90度順時針旋轉
+        function rotateClockwise(matrix) {
+            const n = matrix.length;
+            let result = Array(n).fill().map(() => Array(n).fill(0));
+            for (let r = 0; r < n; r++) {
+                for (let c = 0; c < n; c++) {
+                    result[c][n - 1 - r] = matrix[r][c];
+                }
+            }
+            return result;
+        }
+
+        // 執行方向移動的主程序
+        function move(direction) {
+            // 先備份舊盤面，用來比較是否有實質移動
+            const previousState = JSON.stringify(board);
+            let tempBoard = JSON.parse(JSON.stringify(board));
+            let totalAddedScore = 0;
+            let rotationCount = 0;
+
+            // 依據移動方向旋轉盤面，將所有方向轉化為「向左移動」
+            // 0: 向左 (不旋轉)
+            // 1: 向上 (逆時針90度 = 順時針270度)
+            // 2: 向右 (順時針180度)
+            // 3: 向下 (順時針90度)
+            switch(direction) {
+                case 'UP':
+                    tempBoard = rotateClockwise(rotateClockwise(rotateClockwise(tempBoard)));
+                    rotationCount = 3;
+                    break;
+                case 'RIGHT':
+                    tempBoard = rotateClockwise(rotateClockwise(tempBoard));
+                    rotationCount = 2;
+                    break;
+                case 'DOWN':
+                    tempBoard = rotateClockwise(tempBoard);
+                    rotationCount = 1;
+                    break;
+                case 'LEFT':
+                    rotationCount = 0;
+                    break;
+            }
+
+            // 記錄合併成功的暫時座標 (以向左視角)
+            let tempMerged = [];
+
+            // 針對每一列執行「向左滑動」
+            for (let r = 0; r < 4; r++) {
+                const res = slideLeftRow(tempBoard[r]);
+                tempBoard[r] = res.newRow;
+                totalAddedScore += res.score;
+                
+                // 轉換回二維盤面的合併位置
+                res.mergedIndices.forEach(c => {
+                    tempMerged.push({r, c});
+                });
+            }
+
+            // 將棋盤旋轉回原本方向
+            const reverseRotations = (4 - rotationCount) % 4;
+            for (let i = 0; i < reverseRotations; i++) {
+                tempBoard = rotateClockwise(tempBoard);
+                
+                // 轉換合併座標
+                tempMerged = tempMerged.map(pos => {
+                    return { r: pos.c, c: 3 - pos.r };
+                });
+            }
+
+            // 檢查盤面是否有變化
+            const hasMoved = previousState !== JSON.stringify(tempBoard);
+
+            if (hasMoved) {
+                board = tempBoard;
+                mergedTilePositions = tempMerged;
+                updateScore(totalAddedScore);
+                spawnTile(); // 產生新方塊
+                renderBoard();
+                
+                // 檢查是否達成 2048 勝利
+                if (isWon && !keepPlaying) {
+                    showVictoryOverlay();
+                }
+
+                // 檢查是否遊戲結束
+                if (checkGameOver()) {
+                    showGameOverOverlay();
+                }
+            }
+        }
+
+        // 檢查是否有合法的移動空間 (任何空格，或是相鄰有相同數字)
+        function checkGameOver() {
+            // 1. 檢查是否有空格
+            for (let r = 0; r < 4; r++) {
+                for (let c = 0; c < 4; c++) {
+                    if (board[r][c] === 0) return false;
+                }
+            }
+
+            // 2. 檢查相鄰格子是否可合併 (水平/垂直)
+            for (let r = 0; r < 4; r++) {
+                for (let c = 0; c < 4; c++) {
+                    const val = board[r][c];
+                    // 右方相鄰
+                    if (c < 3 && val === board[r][c + 1]) return false;
+                    // 下方相鄰
+                    if (r < 3 && val === board[r + 1][c]) return false;
+                }
+            }
+
+            // 若以上皆否，則無步可走，GameOver
+            return true;
+        }
+
+        // 呈現遊戲過關
+        function showVictoryOverlay() {
+            victoryOverlay.classList.remove('opacity-0', 'pointer-events-none');
+            victoryOverlay.classList.add('opacity-100');
+        }
+
+        // 呈現遊戲結束
+        function showGameOverOverlay() {
+            finalScoreEl.textContent = score;
+            finalBestEl.textContent = bestScore;
+            gameoverOverlay.classList.remove('opacity-0', 'pointer-events-none');
+            gameoverOverlay.classList.add('opacity-100');
+        }
+
+        // 鍵盤操控綁定
+        window.addEventListener('keydown', function(e) {
+            // 若為對話框顯示狀態，暫停操控 (除非點擊對話框內的按鈕)
+            if (gameoverOverlay.classList.contains('opacity-100') || 
+                (victoryOverlay.classList.contains('opacity-100') && !keepPlaying)) {
+                return;
+            }
+
+            switch(e.key) {
+                case 'ArrowUp':
+                case 'w':
+                case 'W':
+                    e.preventDefault();
+                    move('UP');
+                    break;
+                case 'ArrowDown':
+                case 's':
+                case 'S':
+                    e.preventDefault();
+                    move('DOWN');
+                    break;
+                case 'ArrowLeft':
+                case 'a':
+                case 'A':
+                    e.preventDefault();
+                    move('LEFT');
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                case 'D':
+                    e.preventDefault();
+                    move('RIGHT');
+                    break;
+            }
+        });
+
+        // 按鈕點擊監聽器
+        restartBtn.addEventListener('click', initGame);
+        victoryRestartBtn.addEventListener('click', initGame);
+        gameoverRestartBtn.addEventListener('click', initGame);
+        
+        keepPlayingBtn.addEventListener('click', () => {
+            keepPlaying = true;
+            victoryOverlay.classList.add('opacity-0', 'pointer-events-none');
+        });
+
+        // 虛擬方向鍵點擊綁定 (手機專用)
+        document.getElementById('control-up').addEventListener('click', () => move('UP'));
+        document.getElementById('control-down').addEventListener('click', () => move('DOWN'));
+        document.getElementById('control-left').addEventListener('click', () => move('LEFT'));
+        document.getElementById('control-right').addEventListener('click', () => move('RIGHT'));
+
+        // 觸控滑動手勢偵測 (Swipe)
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let touchEndX = 0;
+        let touchEndY = 0;
+
+        const swipeContainer = document.querySelector('main');
+
+        swipeContainer.addEventListener('touchstart', function(e) {
+            touchStartX = e.changedTouches[0].screenX;
+            touchStartY = e.changedTouches[0].screenY;
+        }, { passive: true });
+
+        swipeContainer.addEventListener('touchend', function(e) {
+            touchEndX = e.changedTouches[0].screenX;
+            touchEndY = e.changedTouches[0].screenY;
+            handleSwipe();
+        }, { passive: true });
+
+        function handleSwipe() {
+            const deltaX = touchEndX - touchStartX;
+            const deltaY = touchEndY - touchStartY;
+            const threshold = 50; // 滑動靈敏度臨界值
+
+            // 若對話框顯示中，禁止手勢操控
+            if (gameoverOverlay.classList.contains('opacity-100') || 
+                (victoryOverlay.classList.contains('opacity-100') && !keepPlaying)) {
+                return;
+            }
+
+            // 判斷滑動方向是水平還是垂直
+            if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                // 水平滑動
+                if (Math.abs(deltaX) > threshold) {
+                    if (deltaX > 0) {
+                        move('RIGHT');
+                    } else {
+                        move('LEFT');
+                    }
+                }
+            } else {
+                // 垂直滑動
+                if (Math.abs(deltaY) > threshold) {
+                    if (deltaY > 0) {
+                        move('DOWN');
+                    } else {
+                        move('UP');
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>
